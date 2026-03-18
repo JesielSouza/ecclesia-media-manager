@@ -372,8 +372,8 @@ Operational note:
 
 ## Recommended next actions for the next agent
 
-1. Start Phase 6 by introducing a request-scoped Supabase client with tenant headers or JWT custom claims.
-2. Reduce service-role dependence in dashboard reads and mutations once request-scoped tenant propagation is in place.
+1. Finish the secure Phase 6 path by removing legacy `x-user-id` fallback once the Clerk JWT template is confirmed in every environment.
+2. Validate end-to-end that Supabase accepts the Clerk JWT template and that dashboard flows no longer rely on compatibility headers for identity.
 3. Confirm whether Abacatepay exposes official subscription lifecycle endpoints for cancellation or reactivation before automating Task 5.3.
 4. Revisit the single-org profile assumption before production rollout to ministries with shared volunteers.
 5. Expand dashboard metrics from static placeholders into live database-backed summaries.
@@ -383,6 +383,6 @@ Operational note:
 The next agent should continue from:
 
 - Phase 6
-- continuing after the Phase 5 billing hardening work, with multi-tenant request-scoped data access as the next focus
+- continuing after Task 6.2, with secure Clerk JWT propagation and removal of legacy header-based identity fallback as the next focus
 
 They should not regenerate or replace the Phase 1 and Phase 2 work unless the user explicitly asks for a refactor.

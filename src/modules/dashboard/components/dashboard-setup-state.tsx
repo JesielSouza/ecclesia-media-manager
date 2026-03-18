@@ -11,6 +11,8 @@ const migrationFiles = [
   "20260317130000_task_1_3_clerk_sync_support.sql",
   "20260318100000_task_4_abacatepay_billing.sql",
   "20260318113000_task_5_6_billing_observability.sql",
+  "20260318150000_task_6_1_request_scoped_tenant_context.sql",
+  "20260318163000_task_6_2_role_aware_rls.sql",
 ] as const;
 
 export function DashboardSetupState({
@@ -55,6 +57,11 @@ export function DashboardSetupState({
           <p>
             Depois confirme que o webhook do Clerk esta populando a tabela
             <code> organizations</code> para a organizacao ativa.
+          </p>
+          <p>
+            Para a fase 6.2, confirme tambem que o Clerk consegue emitir o JWT
+            template usado pelo Supabase e que as migrations mais recentes de RLS
+            foram aplicadas no ambiente.
           </p>
         </CardContent>
       </Card>

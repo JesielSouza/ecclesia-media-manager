@@ -53,6 +53,9 @@ export const env = {
     get clerkWebhookSecret() {
       return readRequiredEnv("CLERK_WEBHOOK_SECRET");
     },
+    get clerkSupabaseJwtTemplate() {
+      return readOptionalEnv("CLERK_SUPABASE_JWT_TEMPLATE") ?? "supabase";
+    },
     get supabaseServiceRoleKey() {
       return readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
     },

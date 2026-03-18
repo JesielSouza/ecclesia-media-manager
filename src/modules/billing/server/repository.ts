@@ -1,5 +1,6 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { env } from "@/lib/env";
+import { createRequestScopedSupabaseClient } from "@/lib/supabase/request-scoped";
 import { requireActiveSessionContext } from "@/modules/auth/server/session";
 import { createAbacatePayClient } from "@/modules/billing/abacatepay";
 import { getPlanChangeKind } from "@/modules/billing/feature-access";
@@ -35,8 +36,17 @@ type SubscriptionEventDetails = {
 const BILLING_PATH = "/dashboard/billing";
 const MANAGEABLE_ROLES = new Set(["admin", "leader", "org:admin"]);
 
-function getSupabase() {
+function getAdminSupabase() {
   return createSupabaseAdminClient();
+}
+
+function getAppSupabase(params: {
+  accessToken?: string | null;
+  clerkOrgId: string;
+  organizationId?: string | null;
+  userId: string;
+}) {
+  return createRequestScopedSupabaseClient(params);
 }
 
 function normalizePlanType(value: string | null | undefined): PlanType | null {
@@ -101,8 +111,10 @@ function getManagedProductId(planType: ManagedPlanType) {
 
 async function resolveOrganizationByClerkOrgId(
   clerkOrgId: string,
+  accessToken: string | null,
+  userId: string,
 ): Promise<OrganizationLookup> {
-  const supabase = getSupabase();
+  const supabase = getAppSupabase({ accessToken, clerkOrgId, userId });
   const { data, error } = await supabase
     .from("organizations")
     .select(
@@ -157,7 +169,7 @@ async function assertBillingManagerAccess() {
 }
 
 async function findCheckoutByExternalId(externalId: string) {
-  const supabase = getSupabase();
+  const supabase = getAdminSupabase();
   const { data, error } = await supabase
     .from("billing_checkouts")
     .select("*")
@@ -196,7 +208,7 @@ async function registerWebhookEvent(params: {
   processingResult?: BillingWebhookProcessingResult;
   subscriptionId?: string | null;
 }) {
-  const supabase = getSupabase();
+  const supabase = getAdminSupabase();
   const { data, error } = await supabase
     .from("billing_webhook_events")
     .insert({
@@ -233,7 +245,7 @@ async function updateWebhookEventProcessing(params: {
   processingResult: BillingWebhookProcessingResult;
   subscriptionId?: string | null;
 }) {
-  const supabase = getSupabase();
+  const supabase = getAdminSupabase();
   const { error } = await supabase
     .from("billing_webhook_events")
     .update({
@@ -312,8 +324,17 @@ function extractSubscriptionEventDetails(
 export async function getBillingOverview(): Promise<BillingOverview> {
   const session = await requireActiveSessionContext(BILLING_PATH);
   const scheduleContext = await resolveScheduleTenantContext();
-  const organization = await resolveOrganizationByClerkOrgId(session.orgId);
-  const supabase = getSupabase();
+  const organization = await resolveOrganizationByClerkOrgId(
+    session.orgId,
+    session.supabaseAccessToken,
+    session.userId,
+  );
+  const supabase = getAppSupabase({
+    accessToken: session.supabaseAccessToken,
+    clerkOrgId: session.orgId,
+    organizationId: organization.id,
+    userId: session.userId,
+  });
   const [
     { data: recentCheckouts, error: checkoutsError },
     { data: recentWebhookEvents, error: webhookEventsError },
@@ -359,8 +380,17 @@ export async function getBillingOverview(): Promise<BillingOverview> {
 
 export async function createSubscriptionCheckout(planType: ManagedPlanType) {
   const context = await assertBillingManagerAccess();
-  const organization = await resolveOrganizationByClerkOrgId(context.clerkOrgId);
-  const supabase = getSupabase();
+  const organization = await resolveOrganizationByClerkOrgId(
+    context.clerkOrgId,
+    context.supabaseAccessToken,
+    context.userId,
+  );
+  const supabase = getAppSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: organization.id,
+    userId: context.userId,
+  });
   const planChangeKind = getPlanChangeKind(organization.plan_type, planType);
 
   if (
@@ -446,8 +476,17 @@ export async function createSubscriptionCheckout(planType: ManagedPlanType) {
 
 export async function refreshLatestCheckoutStatus() {
   const context = await assertBillingManagerAccess();
-  const organization = await resolveOrganizationByClerkOrgId(context.clerkOrgId);
-  const supabase = getSupabase();
+  const organization = await resolveOrganizationByClerkOrgId(
+    context.clerkOrgId,
+    context.supabaseAccessToken,
+    context.userId,
+  );
+  const supabase = getAppSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: organization.id,
+    userId: context.userId,
+  });
   const { data: latestCheckout, error } = await supabase
     .from("billing_checkouts")
     .select("*")
@@ -508,8 +547,17 @@ export async function refreshLatestCheckoutStatus() {
 
 export async function refreshCheckoutStatusById(checkoutId: string) {
   const context = await assertBillingManagerAccess();
-  const organization = await resolveOrganizationByClerkOrgId(context.clerkOrgId);
-  const supabase = getSupabase();
+  const organization = await resolveOrganizationByClerkOrgId(
+    context.clerkOrgId,
+    context.supabaseAccessToken,
+    context.userId,
+  );
+  const supabase = getAppSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: organization.id,
+    userId: context.userId,
+  });
   const { data: checkout, error } = await supabase
     .from("billing_checkouts")
     .select("*")
@@ -613,7 +661,7 @@ export async function processAbacatePayWebhook(params: {
   }
 
   try {
-    const supabase = getSupabase();
+    const supabase = getAdminSupabase();
     const checkoutStatus = mapCheckoutStatus(eventName);
 
     if (checkoutStatus) {

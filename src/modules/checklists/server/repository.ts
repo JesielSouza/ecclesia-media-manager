@@ -1,4 +1,4 @@
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createRequestScopedSupabaseClient } from "@/lib/supabase/request-scoped";
 import {
   resolveScheduleTenantContext,
 } from "@/modules/schedules/server/repository";
@@ -54,8 +54,13 @@ type ChecklistLogRow = {
 
 const CHECKLIST_CATEGORIES: ChecklistCategory[] = ["pre-culto", "pos-culto"];
 
-function getSupabase() {
-  return createSupabaseAdminClient();
+function getSupabase(params: {
+  accessToken?: string | null;
+  clerkOrgId: string;
+  organizationId: string;
+  userId: string;
+}) {
+  return createRequestScopedSupabaseClient(params);
 }
 
 function isChecklistCategory(value: string): value is ChecklistCategory {
@@ -108,7 +113,12 @@ async function assertChecklistManagerAccess() {
 
 export async function getChecklistDashboardData(): Promise<ChecklistDashboardData> {
   const context = await resolveScheduleTenantContext();
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 
   const [{ data: templates, error: templatesError }, { data: logs, error: logsError }] =
     await Promise.all([
@@ -179,7 +189,12 @@ export async function getChecklistDashboardData(): Promise<ChecklistDashboardDat
 export async function createChecklistTemplate(formData: FormData): Promise<void> {
   const context = await assertChecklistManagerAccess();
   const input = parseChecklistTemplateInput(formData);
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 
   const { error } = await supabase.from("checklists").insert({
     category: input.category,
@@ -202,7 +217,12 @@ export async function updateChecklistTemplate(formData: FormData): Promise<void>
   }
 
   const input = parseChecklistTemplateInput(formData);
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 
   const { error } = await supabase
     .from("checklists")
@@ -227,7 +247,12 @@ export async function deleteChecklistTemplate(formData: FormData): Promise<void>
     throw new Error("Item alvo nao informado para exclusao.");
   }
 
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
   const { error } = await supabase
     .from("checklists")
     .delete()
@@ -248,7 +273,12 @@ export async function completeChecklistTask(formData: FormData): Promise<void> {
   }
 
   const checklistId = checklistIdValue.trim();
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
   const { data: checklist, error: checklistError } = await supabase
     .from("checklists")
     .select("id")

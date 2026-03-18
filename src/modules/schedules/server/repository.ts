@@ -1,4 +1,4 @@
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createRequestScopedSupabaseClient } from "@/lib/supabase/request-scoped";
 import { requireActiveSessionContext } from "@/modules/auth/server/session";
 
 export type ScheduleStatus = "pending" | "confirmed" | "declined";
@@ -27,6 +27,7 @@ export type ScheduleTenantContext = {
   clerkOrgId: string;
   organizationId: string;
   organizationName: string;
+  supabaseAccessToken: string | null;
   userId: string;
 };
 
@@ -78,8 +79,13 @@ const SCHEDULE_STATUSES = ["pending", "confirmed", "declined"] as const;
 const VOLUNTEER_RESPONSE_STATUSES: ScheduleStatus[] = ["confirmed", "declined"];
 const MANAGER_ROLES: ProfileRole[] = ["admin", "leader"];
 
-function getSupabase() {
-  return createSupabaseAdminClient();
+function getSupabase(params: {
+  accessToken?: string | null;
+  clerkOrgId: string;
+  organizationId?: string | null;
+  userId: string;
+}) {
+  return createRequestScopedSupabaseClient(params);
 }
 
 function isScheduleStatus(value: string): value is ScheduleStatus {
@@ -143,12 +149,16 @@ function parseScheduleInput(formData: FormData): ScheduleInput {
   };
 }
 
-async function resolveOrganization(clerkOrgId: string): Promise<OrganizationRow> {
-  const supabase = getSupabase();
+async function resolveOrganization(params: {
+  accessToken?: string | null;
+  clerkOrgId: string;
+  userId: string;
+}): Promise<OrganizationRow> {
+  const supabase = getSupabase(params);
   const { data, error } = await supabase
     .from("organizations")
     .select("id, name")
-    .eq("clerk_org_id", clerkOrgId)
+    .eq("clerk_org_id", params.clerkOrgId)
     .maybeSingle<OrganizationRow>();
 
   if (error) {
@@ -165,10 +175,17 @@ async function resolveOrganization(clerkOrgId: string): Promise<OrganizationRow>
 }
 
 async function resolveActorProfile(
+  clerkOrgId: string,
   organizationId: string,
+  accessToken: string | null,
   userId: string,
 ): Promise<ProfileRole | null> {
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken,
+    clerkOrgId,
+    organizationId,
+    userId,
+  });
   const { data, error } = await supabase
     .from("profiles")
     .select("role")
@@ -185,8 +202,17 @@ async function resolveActorProfile(
 
 export async function resolveScheduleTenantContext(): Promise<ScheduleTenantContext> {
   const session = await requireActiveSessionContext("/dashboard/schedules");
-  const organization = await resolveOrganization(session.orgId);
-  const actorProfileRole = await resolveActorProfile(organization.id, session.userId);
+  const organization = await resolveOrganization({
+    accessToken: session.supabaseAccessToken,
+    clerkOrgId: session.orgId,
+    userId: session.userId,
+  });
+  const actorProfileRole = await resolveActorProfile(
+    session.orgId,
+    organization.id,
+    session.supabaseAccessToken,
+    session.userId,
+  );
   const canManageSchedules =
     session.orgRole === "org:admin" ||
     (actorProfileRole !== null && MANAGER_ROLES.includes(actorProfileRole));
@@ -197,13 +223,19 @@ export async function resolveScheduleTenantContext(): Promise<ScheduleTenantCont
     clerkOrgId: session.orgId,
     organizationId: organization.id,
     organizationName: organization.name,
+    supabaseAccessToken: session.supabaseAccessToken,
     userId: session.userId,
   };
 }
 
 export async function getScheduleDashboardData(): Promise<ScheduleDashboardData> {
   const context = await resolveScheduleTenantContext();
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 
   const [{ data: members, error: membersError }, { data: schedules, error: schedulesError }] =
     await Promise.all([
@@ -263,7 +295,12 @@ export async function getScheduleDashboardData(): Promise<ScheduleDashboardData>
 
 export async function getVolunteerServingData(): Promise<VolunteerServingData> {
   const context = await resolveScheduleTenantContext();
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 
   const { data, error } = await supabase
     .from("schedules")
@@ -300,15 +337,23 @@ export async function getVolunteerServingData(): Promise<VolunteerServingData> {
 }
 
 async function ensureMemberBelongsToOrganization(
+  accessToken: string | null,
+  clerkOrgId: string,
   organizationId: string,
-  userId: string,
+  actorUserId: string,
+  targetUserId: string,
 ): Promise<void> {
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken,
+    clerkOrgId,
+    organizationId,
+    userId: actorUserId,
+  });
   const { data, error } = await supabase
     .from("profiles")
     .select("id")
     .eq("org_id", organizationId)
-    .eq("id", userId)
+    .eq("id", targetUserId)
     .maybeSingle<{ id: string }>();
 
   if (error) {
@@ -335,9 +380,20 @@ async function assertScheduleManagerAccess() {
 export async function createSchedule(formData: FormData): Promise<void> {
   const context = await assertScheduleManagerAccess();
   const input = parseScheduleInput(formData);
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 
-  await ensureMemberBelongsToOrganization(context.organizationId, input.userId);
+  await ensureMemberBelongsToOrganization(
+    context.supabaseAccessToken,
+    context.clerkOrgId,
+    context.organizationId,
+    context.userId,
+    input.userId,
+  );
 
   const { error } = await supabase.from("schedules").insert({
     event_date: input.eventDate,
@@ -361,9 +417,20 @@ export async function updateSchedule(formData: FormData): Promise<void> {
   }
 
   const input = parseScheduleInput(formData);
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
 
-  await ensureMemberBelongsToOrganization(context.organizationId, input.userId);
+  await ensureMemberBelongsToOrganization(
+    context.supabaseAccessToken,
+    context.clerkOrgId,
+    context.organizationId,
+    context.userId,
+    input.userId,
+  );
 
   const { error } = await supabase
     .from("schedules")
@@ -389,7 +456,12 @@ export async function deleteSchedule(formData: FormData): Promise<void> {
     throw new Error("Escala alvo nao informada para exclusao.");
   }
 
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
   const { error } = await supabase
     .from("schedules")
     .delete()
@@ -415,7 +487,12 @@ export async function updateOwnScheduleStatus(formData: FormData): Promise<void>
   }
 
   const scheduleId = scheduleIdValue.trim();
-  const supabase = getSupabase();
+  const supabase = getSupabase({
+    accessToken: context.supabaseAccessToken,
+    clerkOrgId: context.clerkOrgId,
+    organizationId: context.organizationId,
+    userId: context.userId,
+  });
   const { data: schedule, error: scheduleError } = await supabase
     .from("schedules")
     .select("id, event_date, status")

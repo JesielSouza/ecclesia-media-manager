@@ -23,6 +23,8 @@ Implemented tasks:
 - Task 5.4: feature gating now respects subscription status, not only saved `plan_type`
 - Task 5.5: administrative billing history with manual checkout resynchronization
 - Task 5.6: billing webhook observability with processing results and operational notes
+- Task 6.1: request-scoped Supabase access foundation using Clerk tenant headers + RLS
+- Task 6.2: role-aware RLS hardening plus Clerk JWT template support for request-scoped Supabase access
 
 ## Application structure
 
@@ -65,6 +67,7 @@ The current repository already spans Phases 1 through 4. The main product flows 
 - `/dashboard/assets` is gated by both `plan_type` and `billing_subscription_status`, only unlocking for organizations with the required paid plan and an active subscription
 - premium feature access is centralized in helpers so the dashboard can render locked/unlocked states consistently
 - webhook events now expose operational processing state (`processed`, `ignored`, `error`) for support visibility
+- request-scoped Supabase access now accepts a Clerk JWT template token when available and falls back to legacy headers only as a compatibility bridge
 
 Main files:
 
@@ -92,6 +95,7 @@ Copy `.env.example` and set:
 - `NEXT_PUBLIC_APP_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_SECRET_KEY`
+- `CLERK_SUPABASE_JWT_TEMPLATE` (optional, defaults to `supabase`)
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -112,12 +116,23 @@ Operational note:
 - feature access helpers now centralize plan-to-feature rules for future gating across dashboard pages
 - the dashboard route interception now uses Next.js root `proxy.ts` instead of the deprecated `middleware.ts` convention
 - webhook observability now stores processing result, note, checkout correlation and subscription id for recent billing events
+- request-scoped Supabase access now prefers a Clerk JWT template token; configure the Clerk template used by Supabase before production rollout
 
 ## Running locally
 
 1. Install dependencies with `npm install`
 2. Start the app with `npm run dev`
 3. Open `http://localhost:3000`
+
+## Database operations
+
+- Link the local CLI to a Supabase project with `npm run db:link -- --project-ref <project-ref> --password <db-password>`
+- Apply pending migrations with `npm run db:push`
+- Run `npm run readiness` to verify env coverage plus Supabase bootstrap state
+- Run `npm run clerk:backfill` to seed Supabase from Clerk when webhook delivery is not ready yet
+- The latest Phase 6 migrations are `20260318150000_task_6_1_request_scoped_tenant_context.sql` and `20260318163000_task_6_2_role_aware_rls.sql`
+- Review the deploy and homologation checklist in [`docs/deploy-homologation-checklist.md`](/c:/Users/Jesiel/Desktop/Workspace/ecclesia-media-manager/docs/deploy-homologation-checklist.md)
+- Review the first tenant bootstrap flow in [`docs/first-tenant-bootstrap.md`](/c:/Users/Jesiel/Desktop/Workspace/ecclesia-media-manager/docs/first-tenant-bootstrap.md)
 
 ## Requirements inventory
 
