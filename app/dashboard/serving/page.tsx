@@ -1,6 +1,11 @@
 import { CalendarClock, CheckCheck, CircleAlert, CircleX, RadioTower } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardSetupState } from "@/modules/dashboard/components/dashboard-setup-state";
+import {
+  getDashboardSetupMessage,
+  isDashboardSetupError,
+} from "@/modules/dashboard/lib/setup-state";
 import { updateOwnScheduleStatusAction } from "@/modules/schedules/server/actions";
 import {
   type ScheduleStatus,
@@ -132,10 +137,25 @@ type ServingPageProps = {
 };
 
 export default async function ServingPage({ searchParams }: ServingPageProps) {
-  const [{ context, schedules }, params] = await Promise.all([
-    getVolunteerServingData(),
-    searchParams,
-  ]);
+  const params = await searchParams;
+  let context;
+  let schedules;
+
+  try {
+    ({ context, schedules } = await getVolunteerServingData());
+  } catch (error) {
+    if (isDashboardSetupError(error)) {
+      return (
+        <DashboardSetupState
+          title="Minha escala aguardando setup do tenant"
+          errorMessage={getDashboardSetupMessage(error)}
+        />
+      );
+    }
+
+    throw error;
+  }
+
   const metrics = buildMetrics(schedules);
   const upcomingSchedules = schedules.filter((schedule) => schedule.isUpcoming);
   const pastSchedules = schedules.filter((schedule) => schedule.isPast).reverse();

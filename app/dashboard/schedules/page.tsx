@@ -9,6 +9,11 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardSetupState } from "@/modules/dashboard/components/dashboard-setup-state";
+import {
+  getDashboardSetupMessage,
+  isDashboardSetupError,
+} from "@/modules/dashboard/lib/setup-state";
 import { buildScheduleWhatsAppUrl } from "@/modules/notifications/whatsapp";
 import {
   createScheduleAction,
@@ -270,10 +275,26 @@ type SchedulesPageProps = {
 };
 
 export default async function SchedulesPage({ searchParams }: SchedulesPageProps) {
-  const [{ context, members, schedules }, params] = await Promise.all([
-    getScheduleDashboardData(),
-    searchParams,
-  ]);
+  const params = await searchParams;
+  let context;
+  let members;
+  let schedules;
+
+  try {
+    ({ context, members, schedules } = await getScheduleDashboardData());
+  } catch (error) {
+    if (isDashboardSetupError(error)) {
+      return (
+        <DashboardSetupState
+          title="Escalas aguardando setup do tenant"
+          errorMessage={getDashboardSetupMessage(error)}
+        />
+      );
+    }
+
+    throw error;
+  }
+
   const editingSchedule = params.edit
     ? schedules.find((schedule) => schedule.id === params.edit)
     : undefined;

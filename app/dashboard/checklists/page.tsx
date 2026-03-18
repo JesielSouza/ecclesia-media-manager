@@ -9,6 +9,11 @@ import {
 } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardSetupState } from "@/modules/dashboard/components/dashboard-setup-state";
+import {
+  getDashboardSetupMessage,
+  isDashboardSetupError,
+} from "@/modules/dashboard/lib/setup-state";
 import {
   completeChecklistTaskAction,
   createChecklistTemplateAction,
@@ -242,10 +247,28 @@ type ChecklistsPageProps = {
 };
 
 export default async function ChecklistsPage({ searchParams }: ChecklistsPageProps) {
-  const [{ context, categories, groupedTemplates, templates }, params] = await Promise.all([
-    getChecklistDashboardData(),
-    searchParams,
-  ]);
+  const params = await searchParams;
+  let context;
+  let categories;
+  let groupedTemplates;
+  let templates;
+
+  try {
+    ({ context, categories, groupedTemplates, templates } =
+      await getChecklistDashboardData());
+  } catch (error) {
+    if (isDashboardSetupError(error)) {
+      return (
+        <DashboardSetupState
+          title="Checklists aguardando setup do tenant"
+          errorMessage={getDashboardSetupMessage(error)}
+        />
+      );
+    }
+
+    throw error;
+  }
+
   const editingTemplate = params.edit
     ? templates.find((template) => template.id === params.edit)
     : undefined;

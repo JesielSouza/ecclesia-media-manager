@@ -8,9 +8,31 @@ import {
   getFeatureAccess,
   getPlanLabel,
 } from "@/modules/billing/feature-access";
+import { DashboardSetupState } from "@/modules/dashboard/components/dashboard-setup-state";
+import {
+  getDashboardSetupMessage,
+  isDashboardSetupError,
+} from "@/modules/dashboard/lib/setup-state";
 
 export default async function AssetsPage() {
-  const { organization, canManageBilling } = await getBillingOverview();
+  let organization;
+  let canManageBilling;
+
+  try {
+    ({ organization, canManageBilling } = await getBillingOverview());
+  } catch (error) {
+    if (isDashboardSetupError(error)) {
+      return (
+        <DashboardSetupState
+          title="Assets aguardando setup do tenant"
+          errorMessage={getDashboardSetupMessage(error)}
+        />
+      );
+    }
+
+    throw error;
+  }
+
   const access = getFeatureAccess(
     organization.plan_type,
     organization.billing_subscription_status,

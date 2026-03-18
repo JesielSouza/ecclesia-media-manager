@@ -15,6 +15,11 @@ import {
   startSubscriptionCheckoutAction,
 } from "@/modules/billing/server/actions";
 import { getBillingOverview } from "@/modules/billing/server/repository";
+import { DashboardSetupState } from "@/modules/dashboard/components/dashboard-setup-state";
+import {
+  getDashboardSetupMessage,
+  isDashboardSetupError,
+} from "@/modules/dashboard/lib/setup-state";
 import type {
   BillingPlanChangeKind,
   BillingSubscriptionStatus,
@@ -170,10 +175,24 @@ function getPlanChangeDescription(changeKind: BillingPlanChangeKind, targetPlan:
 }
 
 export default async function BillingPage({ searchParams }: BillingPageProps) {
-  const [overview, rawSearchParams] = await Promise.all([
-    getBillingOverview(),
-    searchParams ?? Promise.resolve({} satisfies SearchParams),
-  ]);
+  const rawSearchParams = await (searchParams ?? Promise.resolve({} satisfies SearchParams));
+  let overview;
+
+  try {
+    overview = await getBillingOverview();
+  } catch (error) {
+    if (isDashboardSetupError(error)) {
+      return (
+        <DashboardSetupState
+          title="Billing aguardando setup do tenant"
+          errorMessage={getDashboardSetupMessage(error)}
+        />
+      );
+    }
+
+    throw error;
+  }
+
   const resolvedSearchParams = rawSearchParams as {
     error?: string | string[];
     notice?: string | string[];

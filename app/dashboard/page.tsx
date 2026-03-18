@@ -9,7 +9,12 @@ import {
   canAccessFeatureWithSubscription,
   getPlanLabel,
 } from "@/modules/billing/feature-access";
+import { DashboardSetupState } from "@/modules/dashboard/components/dashboard-setup-state";
 import { getDashboardNavigationForPlan } from "@/modules/dashboard/constants/navigation";
+import {
+  getDashboardSetupMessage,
+  isDashboardSetupError,
+} from "@/modules/dashboard/lib/setup-state";
 
 const metrics = [
   {
@@ -37,7 +42,18 @@ export default function DashboardPage() {
 }
 
 async function DashboardContent() {
-  const { organization } = await getBillingOverview();
+  let organization;
+
+  try {
+    ({ organization } = await getBillingOverview());
+  } catch (error) {
+    if (isDashboardSetupError(error)) {
+      return <DashboardSetupState errorMessage={getDashboardSetupMessage(error)} />;
+    }
+
+    throw error;
+  }
+
   const assetsUnlocked = canAccessFeatureWithSubscription(
     organization.plan_type,
     organization.billing_subscription_status,
