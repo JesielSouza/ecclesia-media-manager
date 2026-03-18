@@ -1,12 +1,4 @@
-const REQUIRED_ENV_VARS = [
-  "NEXT_PUBLIC_SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "CLERK_WEBHOOK_SECRET",
-] as const;
-
-type RequiredEnvVar = (typeof REQUIRED_ENV_VARS)[number];
-
-function readRequiredEnv(name: RequiredEnvVar): string {
+function readRequiredEnv(name: string): string {
   const value = process.env[name];
 
   if (!value) {
@@ -17,7 +9,23 @@ function readRequiredEnv(name: RequiredEnvVar): string {
 }
 
 export const env = {
-  nextPublicSupabaseUrl: readRequiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
-  supabaseServiceRoleKey: readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-  clerkWebhookSecret: readRequiredEnv("CLERK_WEBHOOK_SECRET"),
+  public: {
+    get clerkPublishableKey() {
+      return readRequiredEnv("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
+    },
+    get supabaseAnonKey() {
+      return readRequiredEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    },
+    get supabaseUrl() {
+      return readRequiredEnv("NEXT_PUBLIC_SUPABASE_URL");
+    },
+  },
+  server: {
+    get clerkWebhookSecret() {
+      return readRequiredEnv("CLERK_WEBHOOK_SECRET");
+    },
+    get supabaseServiceRoleKey() {
+      return readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+    },
+  },
 };

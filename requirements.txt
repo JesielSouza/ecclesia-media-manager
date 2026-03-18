@@ -1,0 +1,50 @@
+# Ecclesia Media Manager requirements
+# This repository is a TypeScript/Next.js application.
+# Dependency installation is done with `npm install`, not `pip install`.
+# This file documents the project requirements and the libraries currently needed.
+
+[runtime]
+node>=20
+npm>=10
+
+[application_dependencies]
+next@^15.2.4
+react@^19.0.0
+react-dom@^19.0.0
+@clerk/nextjs@^6.11.0
+@supabase/supabase-js@^2.49.1
+svix@^1.62.0
+lucide-react@^0.475.0
+class-variance-authority@^0.7.1
+clsx@^2.1.1
+tailwind-merge@^3.0.2
+
+[development_dependencies]
+typescript@^5.8.2
+tailwindcss@^3.4.17
+postcss@^8.5.3
+autoprefixer@^10.4.20
+eslint@^9.22.0
+eslint-config-next@^15.2.4
+@eslint/js@^9.22.0
+typescript-eslint@^8.26.1
+@types/node@^22.13.10
+@types/react@^19.0.10
+@types/react-dom@^19.0.4
+
+[external_services]
+Supabase project with PostgreSQL and Phase 1 migrations applied
+Clerk application with webhook configured to /api/webhooks/clerk
+
+[environment_variables]
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+CLERK_SECRET_KEY
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+CLERK_WEBHOOK_SECRET
+
+[notes]
+Install project dependencies with: npm install
+Start the development server with: npm run dev
+Current codebase does not require Python packages

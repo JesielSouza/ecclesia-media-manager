@@ -8,6 +8,7 @@ EMM is a multi-tenant platform for church media operations. The core principles 
 - database-first design with Supabase/PostgreSQL
 - Clerk as identity source of truth
 - production-oriented constraints instead of placeholder schema
+- active application tenant resolved from Clerk organization context
 
 ## Delivered in Phase 1
 
@@ -129,18 +130,71 @@ The repository does not yet include:
 - ShadcnUI setup
 - Supabase local config files beyond migrations
 
+## Delivered in Phase 2
+
+### Task 2.1: Dashboard foundation
+
+Files:
+
+- `app/layout.tsx`
+- `app/page.tsx`
+- `app/dashboard/layout.tsx`
+- `src/components/layout/app-shell.tsx`
+- `src/components/ui/*`
+
+What was implemented:
+
+- Next.js App Router foundation
+- Tailwind CSS theme and shared UI primitives
+- authenticated dashboard shell with Clerk-aware identity controls
+
+### Task 2.2: Route protection and active organization selection
+
+Files:
+
+- `middleware.ts`
+- `app/select-organization/page.tsx`
+- `src/modules/auth/server/session.ts`
+
+What was implemented:
+
+- dashboard routes require authenticated Clerk session
+- middleware redirects users without active org to the org selection flow
+- dashboard server components can require active user plus active organization context
+
+### Task 2.3: Schedule CRUD
+
+Files:
+
+- `app/dashboard/schedules/page.tsx`
+- `src/modules/schedules/server/repository.ts`
+- `src/modules/schedules/server/actions.ts`
+
+What was implemented:
+
+- tenant-aware resolution from `Clerk orgId` to synced Supabase `organizations.id`
+- schedule list, metrics, create, update and delete flows in the admin dashboard
+- server-side validation for event date, role, status and assigned volunteer
+- mutation authorization restricted to `admin` and `leader` roles
+- all schedule mutations filtered by the resolved tenant before database writes
+
+Important design detail:
+
+- the current app layer uses the Supabase service-role client, but every schedule operation explicitly resolves and filters by the active organization before reading or mutating data
+- this keeps the current dashboard flow safe while the broader request-scoped RLS propagation contract is still evolving
+
 ## Recommended next actions for the next agent
 
-1. Start Phase 2 with the application bootstrap.
-2. Create the Next.js App Router foundation and install the required dependencies.
-3. Define the runtime contract for active organization propagation so the RLS helpers receive `org_id` consistently.
-4. Revisit the single-org profile assumption before building user-facing admin flows.
+1. Build Task 3.1 on top of the existing `schedules` module instead of creating a parallel volunteer flow.
+2. Revisit the single-org profile assumption before volunteer-facing confirmation screens go live.
+3. Introduce a request-scoped Supabase client with tenant headers or JWT custom claims so application reads can lean on RLS directly.
+4. Expand dashboard metrics from static placeholders into live database-backed summaries.
 
 ## If the user re-sends the original GSD
 
 The next agent should continue from:
 
-- Phase 2
-- starting at Task 2.1
+- Phase 3
+- starting at Task 3.1
 
-They should not regenerate or replace the Phase 1 work unless the user explicitly asks for a schema refactor.
+They should not regenerate or replace the Phase 1 and Phase 2 work unless the user explicitly asks for a refactor.

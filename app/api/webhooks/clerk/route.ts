@@ -14,7 +14,7 @@ function verifyWebhook(headers: Headers, payload: string): ClerkWebhookEvent {
     throw new Error("Missing Svix verification headers.");
   }
 
-  const webhook = new Webhook(env.clerkWebhookSecret);
+  const webhook = new Webhook(env.server.clerkWebhookSecret);
 
   return webhook.verify(payload, {
     "svix-id": svixId,
