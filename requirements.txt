@@ -8,7 +8,7 @@ node>=20
 npm>=10
 
 [application_dependencies]
-next@^15.2.4
+next@^16.1.7
 react@^19.0.0
 react-dom@^19.0.0
 @clerk/nextjs@^6.11.0
@@ -35,16 +35,26 @@ typescript-eslint@^8.26.1
 [external_services]
 Supabase project with PostgreSQL and Phase 1 migrations applied
 Clerk application with webhook configured to /api/webhooks/clerk
+Abacatepay account with recurring products for Pro and Premium plans
+Abacatepay webhook configured to /api/webhooks/abacatepay?webhookSecret=...
 
 [environment_variables]
+NEXT_PUBLIC_APP_URL
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 CLERK_SECRET_KEY
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 CLERK_WEBHOOK_SECRET
+ABACATEPAY_API_KEY
+ABACATEPAY_PUBLIC_KEY
+ABACATEPAY_WEBHOOK_SECRET
+ABACATEPAY_PRO_PRODUCT_ID
+ABACATEPAY_PREMIUM_PRODUCT_ID
 
 [notes]
 Install project dependencies with: npm install
 Start the development server with: npm run dev
 Current codebase does not require Python packages
+Billing flows require Abacatepay products and webhook configuration to work end-to-end
+Next.js route interception now uses the root proxy file convention instead of middleware

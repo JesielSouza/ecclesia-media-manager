@@ -119,16 +119,16 @@ The RLS strategy allows access if the request user is:
 
 This was done to avoid deadlock during tenant bootstrap, where the organization exists before all membership rows are fully synchronized.
 
-### App bootstrap not created yet
+### Application bootstrap status
 
-The repository does not yet include:
+The repository now includes:
 
-- `package.json`
-- Next.js app setup
-- Tailwind setup
-- Clerk frontend integration
-- ShadcnUI setup
-- Supabase local config files beyond migrations
+- `package.json` with the active Next.js toolchain
+- Next.js App Router setup
+- Tailwind CSS setup
+- Clerk frontend integration with graceful misconfiguration handling
+- shared UI primitives in a shadcn-style baseline
+- Supabase migrations for Phases 1 and 4 billing bootstrap
 
 ## Delivered in Phase 2
 
@@ -152,14 +152,14 @@ What was implemented:
 
 Files:
 
-- `middleware.ts`
+- `proxy.ts`
 - `app/select-organization/page.tsx`
 - `src/modules/auth/server/session.ts`
 
 What was implemented:
 
 - dashboard routes require authenticated Clerk session
-- middleware redirects users without active org to the org selection flow
+- root proxy redirects users without active org to the org selection flow
 - dashboard server components can require active user plus active organization context
 
 ### Task 2.3: Schedule CRUD
@@ -244,6 +244,114 @@ Important design detail:
 - this phase uses simple `wa.me` links instead of a provider API
 - the flow depends on valid volunteer phone numbers being stored in international format or at least normalizable digit format
 
+## Delivered in Phase 4
+
+### Task 4.1 and Task 4.2: Abacatepay checkout and webhook foundation
+
+Files:
+
+- `supabase/migrations/20260318100000_task_4_abacatepay_billing.sql`
+- `app/dashboard/billing/page.tsx`
+- `app/api/webhooks/abacatepay/route.ts`
+- `src/modules/billing/types.ts`
+- `src/modules/billing/abacatepay.ts`
+- `src/modules/billing/server/repository.ts`
+- `src/modules/billing/server/actions.ts`
+- `.env.example`
+- `README.md`
+
+What was implemented:
+
+- tenant-scoped billing persistence with organization billing columns, `billing_checkouts`, and `billing_webhook_events`
+- `/dashboard/billing` route with Pro and Premium subscription checkout actions
+- Abacatepay API client calling `POST /v2/subscriptions/create`
+- manual reconciliation of the latest checkout using `GET /v2/subscriptions/list`
+- webhook endpoint with secret-in-query validation plus HMAC verification from `X-Webhook-Signature`
+- idempotent webhook processing using a SHA-256 payload hash
+- organization plan updates from Abacatepay subscription events
+- plan-based feature gating helpers with the first guarded area applied to `/dashboard/assets`
+
+Important design details:
+
+- the integration uses one recurring Abacatepay product per paid plan, referenced by env vars
+- checkout correlation uses `externalId` persisted in `billing_checkouts`, then mapped back during webhook processing
+- billing actions are restricted to tenant managers (`admin` and `leader`)
+- if a tenant already has a pending checkout for the requested plan, the flow reuses the existing checkout URL instead of creating a duplicate
+- plan access rules now live in a dedicated helper instead of being hardcoded in page components
+- webhook processing intentionally avoids strict full-payload validation so future provider payload changes are less likely to break the endpoint
+
+Operational note:
+
+- configure the Abacatepay webhook URL as `/api/webhooks/abacatepay?webhookSecret=...`
+- required env vars now include:
+  - `NEXT_PUBLIC_APP_URL`
+  - `ABACATEPAY_API_KEY`
+  - `ABACATEPAY_PUBLIC_KEY`
+  - `ABACATEPAY_WEBHOOK_SECRET`
+  - `ABACATEPAY_PRO_PRODUCT_ID`
+  - `ABACATEPAY_PREMIUM_PRODUCT_ID`
+
+## Delivered in Phase 5
+
+### Task 5.1 and Task 5.2: Expanded gating coverage and plan-change aware billing UX
+
+Files:
+
+- `src/modules/billing/feature-access.ts`
+- `src/modules/dashboard/constants/navigation.ts`
+- `app/dashboard/page.tsx`
+- `app/dashboard/assets/page.tsx`
+- `app/dashboard/billing/page.tsx`
+- `src/modules/billing/server/repository.ts`
+- `src/modules/billing/types.ts`
+
+What was implemented:
+
+- centralized feature matrix for current dashboard areas
+- dashboard cards now reflect locked and unlocked states consistently from shared billing rules
+- paid feature access now considers both `plan_type` and `billing_subscription_status`
+- billing UI now distinguishes new subscription, upgrade and downgrade intent
+- plan-change context is persisted into checkout metadata for later operational correlation
+
+Important design detail:
+
+- the product currently treats subscription lifecycle changes as new billing checkouts because a direct official cancellation/reactivation lifecycle route was not confirmed during implementation
+
+### Task 5.5: Administrative billing history and manual reconciliation
+
+Files:
+
+- `app/dashboard/billing/page.tsx`
+- `src/modules/billing/server/repository.ts`
+- `src/modules/billing/server/actions.ts`
+
+What was implemented:
+
+- billing overview now returns recent checkout history instead of only the latest record
+- admins and leaders can manually resynchronize a specific checkout, not just the newest one
+- billing dashboard now surfaces recent checkout records with status, amount, paid timestamp and checkout URL when present
+
+### Task 5.6: Billing webhook observability
+
+Files:
+
+- `supabase/migrations/20260318113000_task_5_6_billing_observability.sql`
+- `app/api/webhooks/abacatepay/route.ts`
+- `app/dashboard/billing/page.tsx`
+- `src/modules/billing/types.ts`
+- `src/modules/billing/server/repository.ts`
+
+What was implemented:
+
+- billing webhook events now store processing result, note, related checkout, external checkout id and subscription id
+- webhook processing distinguishes `processed`, `ignored` and `error`
+- billing dashboard now exposes recent webhook events with operational notes for support visibility
+- webhook HTTP response now reports the processing result for easier diagnostics
+
+Important design detail:
+
+- duplicate webhook payloads still deduplicate by payload hash, but recent operational views now make that behavior visible instead of opaque
+
 ## Environment and first access notes
 
 What was validated:
@@ -264,16 +372,17 @@ Operational note:
 
 ## Recommended next actions for the next agent
 
-1. Start Phase 4 with Abacatepay checkout integration.
-2. Revisit the single-org profile assumption before production rollout to ministries with shared volunteers.
-3. Introduce a request-scoped Supabase client with tenant headers or JWT custom claims so application reads can lean on RLS directly.
-4. Expand dashboard metrics from static placeholders into live database-backed summaries.
+1. Start Phase 6 by introducing a request-scoped Supabase client with tenant headers or JWT custom claims.
+2. Reduce service-role dependence in dashboard reads and mutations once request-scoped tenant propagation is in place.
+3. Confirm whether Abacatepay exposes official subscription lifecycle endpoints for cancellation or reactivation before automating Task 5.3.
+4. Revisit the single-org profile assumption before production rollout to ministries with shared volunteers.
+5. Expand dashboard metrics from static placeholders into live database-backed summaries.
 
 ## If the user re-sends the original GSD
 
 The next agent should continue from:
 
-- Phase 4
-- starting at Task 4.1
+- Phase 6
+- continuing after the Phase 5 billing hardening work, with multi-tenant request-scoped data access as the next focus
 
 They should not regenerate or replace the Phase 1 and Phase 2 work unless the user explicitly asks for a refactor.

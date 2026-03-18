@@ -15,11 +15,20 @@ Implemented tasks:
 - Task 3.1: volunteer mobile-first confirmation flow
 - Task 3.2: interactive checklist flow with timestamp logs
 - Task 3.3: simple WhatsApp follow-up integration from schedules
+- Task 4.1: Abacatepay recurring subscription checkout bootstrap
+- Task 4.2: Abacatepay payment webhook updating tenant plan state
+- Task 4.3: plan-based feature gating foundation for dashboard areas
+- Task 5.1: broader dashboard gating coverage using centralized feature access rules
+- Task 5.2: plan-change aware billing UX for new subscription, upgrade, and downgrade intents
+- Task 5.4: feature gating now respects subscription status, not only saved `plan_type`
+- Task 5.5: administrative billing history with manual checkout resynchronization
+- Task 5.6: billing webhook observability with processing results and operational notes
 
 ## Application structure
 
 ```text
 app/
+  api/webhooks/abacatepay/route.ts
   api/webhooks/clerk/route.ts
   globals.css
   layout.tsx
@@ -33,6 +42,7 @@ src/
     supabase/
     utils.ts
   modules/
+    billing/
     checklists/
     clerk-sync/
     dashboard/
@@ -42,21 +52,33 @@ supabase/
   migrations/
 ```
 
-## Phase 3 flows
+## Current product flows
 
-Task 3 extends the current dashboard foundation with operational routines for ministry teams:
+The current repository already spans Phases 1 through 4. The main product flows available today are:
 
 - `/dashboard/schedules` is protected by Clerk and requires an active organization
 - admins and leaders can manage schedule records and open WhatsApp follow-ups for pending or declined volunteers
 - `/dashboard/serving` gives volunteers a mobile-first view to confirm or decline their own upcoming assignments
 - `/dashboard/checklists` lets the team execute pre-service and post-service checklists with timestamped completion logs
 - checklist templates remain tenant-scoped and editable only by organization `admin` and `leader` roles
+- `/dashboard/billing` starts recurring subscription checkout, distinguishes new subscription vs upgrade vs downgrade intent, prevents duplicate pending checkouts, and exposes administrative history plus manual reconciliation
+- `/dashboard/assets` is gated by both `plan_type` and `billing_subscription_status`, only unlocking for organizations with the required paid plan and an active subscription
+- premium feature access is centralized in helpers so the dashboard can render locked/unlocked states consistently
+- webhook events now expose operational processing state (`processed`, `ignored`, `error`) for support visibility
 
 Main files:
 
 - `app/dashboard/schedules/page.tsx`
 - `app/dashboard/serving/page.tsx`
 - `app/dashboard/checklists/page.tsx`
+- `app/dashboard/billing/page.tsx`
+- `app/api/webhooks/abacatepay/route.ts`
+- `src/modules/billing/abacatepay.ts`
+- `src/modules/billing/feature-access.ts`
+- `src/modules/billing/server/repository.ts`
+- `src/modules/billing/server/actions.ts`
+- `proxy.ts`
+- `supabase/migrations/20260318113000_task_5_6_billing_observability.sql`
 - `src/modules/checklists/server/repository.ts`
 - `src/modules/checklists/server/actions.ts`
 - `src/modules/notifications/whatsapp.ts`
@@ -67,17 +89,29 @@ Main files:
 
 Copy `.env.example` and set:
 
+- `NEXT_PUBLIC_APP_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CLERK_WEBHOOK_SECRET`
+- `ABACATEPAY_API_KEY`
+- `ABACATEPAY_PUBLIC_KEY`
+- `ABACATEPAY_WEBHOOK_SECRET`
+- `ABACATEPAY_PRO_PRODUCT_ID`
+- `ABACATEPAY_PREMIUM_PRODUCT_ID`
 
 Operational note:
 
 - Clerk sign-in/sign-up now fail gracefully if Clerk is not configured, showing setup guidance instead of a runtime crash
 - for local sync, expose `http://localhost:3000/api/webhooks/clerk` through a tunnel and register that URL in the Clerk Webhooks dashboard
+- configure the Abacatepay webhook URL as `http://localhost:3000/api/webhooks/abacatepay?webhookSecret=...`
+- the billing area is restricted to tenant `admin` and `leader` roles
+- the latest subscription checkout can be manually synchronized against `GET /v2/subscriptions/list` if the webhook is delayed
+- feature access helpers now centralize plan-to-feature rules for future gating across dashboard pages
+- the dashboard route interception now uses Next.js root `proxy.ts` instead of the deprecated `middleware.ts` convention
+- webhook observability now stores processing result, note, checkout correlation and subscription id for recent billing events
 
 ## Running locally
 
