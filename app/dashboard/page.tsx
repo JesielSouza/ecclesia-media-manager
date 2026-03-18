@@ -1,9 +1,16 @@
-import { CalendarCheck2, ClipboardList, FolderKanban } from "lucide-react";
+import Link from "next/link";
+import { CalendarCheck2, ClipboardList, FolderKanban, Smartphone } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { dashboardNavigation } from "@/modules/dashboard/constants/navigation";
 
 const metrics = [
+  {
+    title: "Voluntarios",
+    value: "Live",
+    description: "confirmacao mobile-first iniciada",
+    icon: Smartphone,
+  },
   {
     title: "Escalas",
     value: "12",
@@ -37,7 +44,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {metrics.map(({ title, value, description, icon: Icon }) => (
           <Card key={title} className="border-white/70 bg-white/85 shadow-soft">
             <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -56,14 +63,16 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         {dashboardNavigation.map((item) => (
-          <Card key={item.href} className="border-border/70 bg-background/80">
-            <CardHeader>
-              <CardTitle>{item.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{item.description}</p>
-            </CardContent>
-          </Card>
+          <Link key={item.href} href={item.href} className="block">
+            <Card className="h-full border-border/70 bg-background/80 transition hover:border-primary/40 hover:bg-white/90">
+              <CardHeader>
+                <CardTitle>{item.title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">{item.description}</p>
+              </CardContent>
+            </Card>
+          </Link>
         ))}
       </div>
     </section>

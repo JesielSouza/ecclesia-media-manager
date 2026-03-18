@@ -36,6 +36,16 @@ export type ScheduleDashboardData = {
   schedules: ScheduleRecord[];
 };
 
+export type VolunteerScheduleRecord = ScheduleRecord & {
+  isPast: boolean;
+  isUpcoming: boolean;
+};
+
+export type VolunteerServingData = {
+  context: ScheduleTenantContext;
+  schedules: VolunteerScheduleRecord[];
+};
+
 type OrganizationRow = {
   id: string;
   name: string;
@@ -65,6 +75,7 @@ type ScheduleInput = {
 };
 
 const SCHEDULE_STATUSES = ["pending", "confirmed", "declined"] as const;
+const VOLUNTEER_RESPONSE_STATUSES: ScheduleStatus[] = ["confirmed", "declined"];
 const MANAGER_ROLES: ProfileRole[] = ["admin", "leader"];
 
 function getSupabase() {
@@ -73,6 +84,10 @@ function getSupabase() {
 
 function isScheduleStatus(value: string): value is ScheduleStatus {
   return (SCHEDULE_STATUSES as readonly string[]).includes(value);
+}
+
+function isVolunteerResponseStatus(value: string): value is ScheduleStatus {
+  return VOLUNTEER_RESPONSE_STATUSES.includes(value as ScheduleStatus);
 }
 
 function formatSupabaseError(message: string, error: { message: string }) {
@@ -246,6 +261,44 @@ export async function getScheduleDashboardData(): Promise<ScheduleDashboardData>
   };
 }
 
+export async function getVolunteerServingData(): Promise<VolunteerServingData> {
+  const context = await resolveScheduleTenantContext();
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("schedules")
+    .select("id, event_date, user_id, role_name, status, created_at")
+    .eq("org_id", context.organizationId)
+    .eq("user_id", context.userId)
+    .order("event_date", { ascending: true })
+    .returns<ScheduleRow[]>();
+
+  if (error) {
+    throw new Error(`Falha ao carregar suas escalas. ${error.message}`);
+  }
+
+  const now = Date.now();
+
+  return {
+    context,
+    schedules: (data ?? []).map((schedule) => {
+      const eventDateTime = new Date(schedule.event_date).getTime();
+
+      return {
+        createdAt: schedule.created_at,
+        eventDate: schedule.event_date,
+        id: schedule.id,
+        isPast: eventDateTime < now,
+        isUpcoming: eventDateTime >= now,
+        member: null,
+        roleName: schedule.role_name,
+        status: schedule.status,
+        userId: schedule.user_id,
+      };
+    }),
+  };
+}
+
 async function ensureMemberBelongsToOrganization(
   organizationId: string,
   userId: string,
@@ -345,5 +398,54 @@ export async function deleteSchedule(formData: FormData): Promise<void> {
 
   if (error) {
     throw new Error(`Falha ao excluir a escala. ${error.message}`);
+  }
+}
+
+export async function updateOwnScheduleStatus(formData: FormData): Promise<void> {
+  const context = await resolveScheduleTenantContext();
+  const scheduleIdValue = formData.get("scheduleId");
+  const statusValue = formData.get("status");
+
+  if (typeof scheduleIdValue !== "string" || !scheduleIdValue.trim()) {
+    throw new Error("Escala alvo nao informada para confirmacao.");
+  }
+
+  if (typeof statusValue !== "string" || !isVolunteerResponseStatus(statusValue)) {
+    throw new Error("Resposta de confirmacao invalida.");
+  }
+
+  const scheduleId = scheduleIdValue.trim();
+  const supabase = getSupabase();
+  const { data: schedule, error: scheduleError } = await supabase
+    .from("schedules")
+    .select("id, event_date, status")
+    .eq("org_id", context.organizationId)
+    .eq("id", scheduleId)
+    .eq("user_id", context.userId)
+    .maybeSingle<{ event_date: string; id: string; status: ScheduleStatus }>();
+
+  if (scheduleError) {
+    throw new Error(`Falha ao validar sua escala. ${scheduleError.message}`);
+  }
+
+  if (!schedule) {
+    throw new Error("Essa escala nao pertence ao usuario ativo ou nao existe.");
+  }
+
+  if (new Date(schedule.event_date).getTime() < Date.now()) {
+    throw new Error("Nao e possivel responder escalas de eventos que ja aconteceram.");
+  }
+
+  const { error } = await supabase
+    .from("schedules")
+    .update({
+      status: statusValue,
+    })
+    .eq("org_id", context.organizationId)
+    .eq("id", scheduleId)
+    .eq("user_id", context.userId);
+
+  if (error) {
+    throw new Error(`Falha ao atualizar sua confirmacao. ${error.message}`);
   }
 }

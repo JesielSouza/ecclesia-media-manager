@@ -3,19 +3,12 @@
 import type { PropsWithChildren } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
 
+import { hasUsableClerkPublishableKey } from "@/modules/auth/lib/clerk-config";
+
 type AuthProviderProps = PropsWithChildren;
 
-function hasUsablePublishableKey() {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-
-  return (
-    typeof publishableKey === "string" &&
-    /^pk_(test|live)_/.test(publishableKey)
-  );
-}
-
 export function AppClerkProvider({ children }: AuthProviderProps) {
-  if (!hasUsablePublishableKey()) {
+  if (!hasUsableClerkPublishableKey(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)) {
     return <>{children}</>;
   }
 

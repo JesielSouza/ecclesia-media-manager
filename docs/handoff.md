@@ -183,10 +183,89 @@ Important design detail:
 - the current app layer uses the Supabase service-role client, but every schedule operation explicitly resolves and filters by the active organization before reading or mutating data
 - this keeps the current dashboard flow safe while the broader request-scoped RLS propagation contract is still evolving
 
+## Delivered in Phase 3
+
+### Task 3.1: Volunteer mobile-first confirmation
+
+Files:
+
+- `app/dashboard/serving/page.tsx`
+- `src/modules/schedules/server/repository.ts`
+- `src/modules/schedules/server/actions.ts`
+- `src/modules/dashboard/constants/navigation.ts`
+
+What was implemented:
+
+- a dedicated `/dashboard/serving` route for volunteers
+- confirmation and decline actions scoped to the active user and active organization
+- protection against responding to past schedules
+- dashboard navigation updated to expose the volunteer flow
+
+Important design detail:
+
+- volunteer confirmation reuses the existing schedule module instead of creating a parallel data flow
+- status updates are filtered by both `org_id` and `user_id`, so one user cannot respond to another user's assignment
+
+### Task 3.2: Interactive checklist with timestamp log
+
+Files:
+
+- `app/dashboard/checklists/page.tsx`
+- `src/modules/checklists/server/repository.ts`
+- `src/modules/checklists/server/actions.ts`
+
+What was implemented:
+
+- checklist template management by category (`pre-culto`, `pos-culto`)
+- interactive checklist execution in the dashboard
+- insertion of timestamped records into `checklist_logs`
+- permissions that keep template management restricted to `admin` and `leader`, while allowing operational execution for the active tenant
+
+Important design detail:
+
+- the current implementation treats `checklists` as tenant-scoped templates and `checklist_logs` as execution history
+- every completion creates a new log entry, preserving an operational audit trail
+
+### Task 3.3: WhatsApp follow-up integration
+
+Files:
+
+- `src/modules/notifications/whatsapp.ts`
+- `app/dashboard/schedules/page.tsx`
+
+What was implemented:
+
+- WhatsApp deep links generated from volunteer phone numbers in `profiles`
+- pre-filled reminder and follow-up messages based on schedule status
+- quick actions in the schedule dashboard for pending and declined assignments
+
+Important design detail:
+
+- this phase uses simple `wa.me` links instead of a provider API
+- the flow depends on valid volunteer phone numbers being stored in international format or at least normalizable digit format
+
+## Environment and first access notes
+
+What was validated:
+
+- Clerk pages now fail gracefully when Clerk is not configured, instead of crashing at runtime
+- local environment requires:
+  - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+  - `CLERK_SECRET_KEY`
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `CLERK_WEBHOOK_SECRET`
+- Clerk webhook endpoint for this project is `/api/webhooks/clerk`
+
+Operational note:
+
+- first access only works end-to-end if Clerk webhook delivery is configured and organization/profile rows are synced into Supabase
+
 ## Recommended next actions for the next agent
 
-1. Build Task 3.1 on top of the existing `schedules` module instead of creating a parallel volunteer flow.
-2. Revisit the single-org profile assumption before volunteer-facing confirmation screens go live.
+1. Start Phase 4 with Abacatepay checkout integration.
+2. Revisit the single-org profile assumption before production rollout to ministries with shared volunteers.
 3. Introduce a request-scoped Supabase client with tenant headers or JWT custom claims so application reads can lean on RLS directly.
 4. Expand dashboard metrics from static placeholders into live database-backed summaries.
 
@@ -194,7 +273,7 @@ Important design detail:
 
 The next agent should continue from:
 
-- Phase 3
-- starting at Task 3.1
+- Phase 4
+- starting at Task 4.1
 
 They should not regenerate or replace the Phase 1 and Phase 2 work unless the user explicitly asks for a refactor.

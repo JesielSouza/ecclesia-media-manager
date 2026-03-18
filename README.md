@@ -1,6 +1,6 @@
 # Ecclesia Media Manager
 
-Ecclesia Media Manager (EMM) is a multi-tenant micro-SaaS for church media teams. The repository now includes the Phase 1 database foundation and the initial Phase 2 admin dashboard bootstrap.
+Ecclesia Media Manager (EMM) is a multi-tenant micro-SaaS for church media teams. The repository now includes the Phase 1 database foundation, the Phase 2 admin dashboard bootstrap, and the first operational flows from Phase 3.
 
 ## Current status
 
@@ -12,6 +12,9 @@ Implemented tasks:
 - Task 2.1: Next.js App Router + Tailwind CSS + shadcn-style UI base + folder structure
 - Task 2.2: route protection middleware with Clerk + active organization selection
 - Task 2.3: admin schedule CRUD with tenant-aware organization resolution
+- Task 3.1: volunteer mobile-first confirmation flow
+- Task 3.2: interactive checklist flow with timestamp logs
+- Task 3.3: simple WhatsApp follow-up integration from schedules
 
 ## Application structure
 
@@ -30,26 +33,33 @@ src/
     supabase/
     utils.ts
   modules/
+    checklists/
     clerk-sync/
     dashboard/
+    notifications/
     schedules/
 supabase/
   migrations/
 ```
 
-## Schedule CRUD flow
+## Phase 3 flows
 
-Task 2.3 adds the first production-oriented admin workflow in the dashboard:
+Task 3 extends the current dashboard foundation with operational routines for ministry teams:
 
 - `/dashboard/schedules` is protected by Clerk and requires an active organization
-- the page resolves the Clerk organization id into the synced Supabase `organizations.id`
-- create, update and delete operations are scoped by the active tenant before touching `schedules`
-- only organization `admin` and `leader` roles can mutate schedule records
-- members are loaded from `profiles` so every assignment remains inside the active tenant
+- admins and leaders can manage schedule records and open WhatsApp follow-ups for pending or declined volunteers
+- `/dashboard/serving` gives volunteers a mobile-first view to confirm or decline their own upcoming assignments
+- `/dashboard/checklists` lets the team execute pre-service and post-service checklists with timestamped completion logs
+- checklist templates remain tenant-scoped and editable only by organization `admin` and `leader` roles
 
 Main files:
 
 - `app/dashboard/schedules/page.tsx`
+- `app/dashboard/serving/page.tsx`
+- `app/dashboard/checklists/page.tsx`
+- `src/modules/checklists/server/repository.ts`
+- `src/modules/checklists/server/actions.ts`
+- `src/modules/notifications/whatsapp.ts`
 - `src/modules/schedules/server/repository.ts`
 - `src/modules/schedules/server/actions.ts`
 
@@ -63,6 +73,11 @@ Copy `.env.example` and set:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CLERK_WEBHOOK_SECRET`
+
+Operational note:
+
+- Clerk sign-in/sign-up now fail gracefully if Clerk is not configured, showing setup guidance instead of a runtime crash
+- for local sync, expose `http://localhost:3000/api/webhooks/clerk` through a tunnel and register that URL in the Clerk Webhooks dashboard
 
 ## Running locally
 

@@ -1,7 +1,15 @@
 import Link from "next/link";
-import { CalendarDays, CircleCheckBig, Clock3, ShieldCheck, Users2 } from "lucide-react";
+import {
+  CalendarDays,
+  CircleCheckBig,
+  Clock3,
+  MessageCircleMore,
+  ShieldCheck,
+  Users2,
+} from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildScheduleWhatsAppUrl } from "@/modules/notifications/whatsapp";
 import {
   createScheduleAction,
   deleteScheduleAction,
@@ -96,6 +104,26 @@ function buildMetrics(schedules: ScheduleRecord[]) {
       value: String(uniqueVolunteers),
     },
   ] as const;
+}
+
+function buildWhatsAppFollowUps(
+  schedules: ScheduleRecord[],
+  organizationName: string,
+) {
+  return schedules
+    .filter(
+      (schedule) =>
+        schedule.status === "pending" || schedule.status === "declined",
+    )
+    .map((schedule) => ({
+      schedule,
+      url: buildScheduleWhatsAppUrl({
+        member: schedule.member,
+        organizationName,
+        schedule,
+      }),
+    }))
+    .filter((item): item is { schedule: ScheduleRecord; url: string } => item.url !== null);
 }
 
 type ScheduleFormProps = {
@@ -250,6 +278,10 @@ export default async function SchedulesPage({ searchParams }: SchedulesPageProps
     ? schedules.find((schedule) => schedule.id === params.edit)
     : undefined;
   const metrics = buildMetrics(schedules);
+  const whatsappFollowUps = buildWhatsAppFollowUps(
+    schedules,
+    context.organizationName,
+  );
 
   return (
     <section className="space-y-8">
@@ -320,6 +352,27 @@ export default async function SchedulesPage({ searchParams }: SchedulesPageProps
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
+            {context.canManageSchedules ? (
+              <div className="rounded-[24px] border border-emerald-200 bg-emerald-50/80 p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-emerald-900">
+                      Follow-up por WhatsApp
+                    </p>
+                    <p className="text-sm text-emerald-800/90">
+                      {whatsappFollowUps.length > 0
+                        ? `${whatsappFollowUps.length} escalas com contato rapido disponivel para pendencias ou recusas.`
+                        : "Nenhuma escala pendente ou recusada com telefone valido para WhatsApp no momento."}
+                    </p>
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-emerald-900">
+                    <MessageCircleMore className="size-4 text-emerald-700" />
+                    Integracao simples ativa
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {schedules.length === 0 ? (
               <div className="rounded-[24px] border border-dashed border-border bg-background/80 p-6 text-sm text-muted-foreground">
                 Nenhuma escala cadastrada ainda. Use o formulario ao lado para
@@ -363,6 +416,26 @@ export default async function SchedulesPage({ searchParams }: SchedulesPageProps
 
                     {context.canManageSchedules ? (
                       <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+                        {buildScheduleWhatsAppUrl({
+                          member: schedule.member,
+                          organizationName: context.organizationName,
+                          schedule,
+                        }) ? (
+                          <a
+                            href={
+                              buildScheduleWhatsAppUrl({
+                                member: schedule.member,
+                                organizationName: context.organizationName,
+                                schedule,
+                              }) ?? "#"
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex h-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                          >
+                            WhatsApp
+                          </a>
+                        ) : null}
                         <Link
                           href={`/dashboard/schedules?edit=${schedule.id}`}
                           className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-white px-4 text-sm font-semibold text-foreground transition hover:bg-secondary"
@@ -387,6 +460,52 @@ export default async function SchedulesPage({ searchParams }: SchedulesPageProps
           </CardContent>
         </Card>
       </div>
+
+      {context.canManageSchedules ? (
+        <Card className="border-white/70 bg-white/90 shadow-soft">
+          <CardHeader className="space-y-2">
+            <CardTitle className="font-[family-name:var(--font-heading)] text-2xl">
+              Acoes rapidas no WhatsApp
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Abra mensagens prontas para cobrar confirmacao ou tratar recusas sem
+              sair do fluxo operacional.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {whatsappFollowUps.length === 0 ? (
+              <div className="rounded-[22px] border border-dashed border-border bg-background/80 p-4 text-sm text-muted-foreground">
+                Para aparecer aqui, a escala precisa estar pendente ou recusada e o
+                voluntario precisa ter telefone em formato valido.
+              </div>
+            ) : (
+              whatsappFollowUps.map(({ schedule, url }) => (
+                <div
+                  key={schedule.id}
+                  className="flex flex-col gap-3 rounded-[22px] border border-border/70 bg-background/75 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="space-y-1">
+                    <p className="font-semibold text-foreground">
+                      {schedule.member?.fullName ?? schedule.userId}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {schedule.roleName} · {formatEventDate(schedule.eventDate)}
+                    </p>
+                  </div>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                  >
+                    Abrir conversa
+                  </a>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </section>
   );
 }

@@ -1,5 +1,10 @@
 export const dashboardNavigation = [
   {
+    title: "Minha escala",
+    href: "/dashboard/serving",
+    description: "Fluxo mobile-first para voluntarios confirmarem sua participacao.",
+  },
+  {
     title: "Escalas",
     href: "/dashboard/schedules",
     description: "Gerencie escalas e confirmacoes por culto.",
