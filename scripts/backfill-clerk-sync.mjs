@@ -41,7 +41,7 @@ function requireEnv(env, key) {
   const value = env[key];
 
   if (!value || value.trim().length === 0) {
-    throw new Error(`Missing required environment variable: ${key}`);
+    throw new Error(`Variavel de ambiente obrigatoria ausente: ${key}`);
   }
 
   return value;
@@ -152,7 +152,9 @@ async function main() {
   );
 
   if (organizations.length === 0) {
-    console.log("No Clerk organizations found. Create the first organization and rerun.");
+    console.log(
+      "Nenhuma organizacao foi encontrada no Clerk. Crie a primeira organizacao e rode novamente.",
+    );
     return;
   }
 
@@ -167,7 +169,9 @@ async function main() {
       readStringMetadata(organization.publicMetadata, "owner_id");
 
     if (!ownerId) {
-      console.log(`Skipping organization ${organization.id} because owner id is missing.`);
+      console.log(
+        `Ignorando a organizacao ${organization.id} porque o owner id nao foi informado.`,
+      );
       continue;
     }
 
@@ -187,7 +191,7 @@ async function main() {
 
     if (existingOrganizationError) {
       throw new Error(
-        `Failed to check organization ${organization.id}: ${existingOrganizationError.message}`,
+        `Falha ao verificar a organizacao ${organization.id}: ${existingOrganizationError.message}`,
       );
     }
 
@@ -199,9 +203,11 @@ async function main() {
 
     if (organizationError) {
       throw new Error(
-        `Failed to persist organization ${organization.id}: ${organizationError.message}`,
+        `Falha ao persistir a organizacao ${organization.id}: ${organizationError.message}`,
       );
     }
+
+    syncedOrganizations += 1;
 
     const { data: syncedOrganization, error: syncedOrganizationError } = await supabase
       .from("organizations")
@@ -211,8 +217,8 @@ async function main() {
 
     if (syncedOrganizationError || !syncedOrganization) {
       throw new Error(
-        `Failed to resolve synced organization ${organization.id}: ${
-          syncedOrganizationError?.message ?? "not found"
+        `Falha ao resolver a organizacao sincronizada ${organization.id}: ${
+          syncedOrganizationError?.message ?? "nao encontrada"
         }`,
       );
     }
@@ -229,6 +235,24 @@ async function main() {
 
       if (!userId) {
         continue;
+      }
+
+      const { data: existingProfile, error: existingProfileError } = await supabase
+        .from("profiles")
+        .select("id, org_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (existingProfileError) {
+        throw new Error(
+          `Falha ao verificar o profile ${userId}: ${existingProfileError.message}`,
+        );
+      }
+
+      if (existingProfile && existingProfile.org_id !== syncedOrganization.id) {
+        throw new Error(
+          `O usuario ${userId} ja esta vinculado a outra organizacao no modelo atual de profiles. O backfill multi-org nao e suportado sem refatorar para memberships.`,
+        );
       }
 
       const fullName = buildFullName({
@@ -254,7 +278,7 @@ async function main() {
 
       if (profileError) {
         throw new Error(
-          `Failed to upsert profile ${userId} from membership ${membership.id}: ${profileError.message}`,
+          `Falha ao fazer upsert do profile ${userId} a partir da membership ${membership.id}: ${profileError.message}`,
         );
       }
 
@@ -283,7 +307,7 @@ async function main() {
       .eq("id", user.id);
 
     if (error) {
-      throw new Error(`Failed to update profile ${user.id}: ${error.message}`);
+      throw new Error(`Falha ao atualizar o profile ${user.id}: ${error.message}`);
     }
 
     syncedUsers += 1;

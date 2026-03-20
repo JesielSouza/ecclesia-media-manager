@@ -17,6 +17,11 @@ type OrganizationRecord = {
   owner_id: string;
 };
 
+type ProfileOrganizationRecord = {
+  id: string;
+  org_id: string;
+};
+
 export class ClerkSyncService {
   private readonly supabase = createSupabaseAdminClient();
 
@@ -60,7 +65,7 @@ export class ClerkSyncService {
 
     if (!ownerId) {
       throw new Error(
-        `Cannot sync organization ${organization.id} without a Clerk owner identifier.`,
+        `Nao foi possivel sincronizar a organizacao ${organization.id} sem um identificador de owner no Clerk.`,
       );
     }
 
@@ -78,7 +83,7 @@ export class ClerkSyncService {
           .from("organizations")
           .update(payload)
           .eq("id", existingOrganization.id),
-        `Failed to update organization ${organization.id}.`,
+        `Falha ao atualizar a organizacao ${organization.id}.`,
       );
 
       return;
@@ -86,7 +91,7 @@ export class ClerkSyncService {
 
     await this.runSupabaseMutation(
       this.supabase.from("organizations").insert(payload),
-      `Failed to insert organization ${organization.id}.`,
+      `Falha ao inserir a organizacao ${organization.id}.`,
     );
   }
 
@@ -98,7 +103,7 @@ export class ClerkSyncService {
         .from("organizations")
         .delete()
         .eq("clerk_org_id", organization.id),
-      `Failed to delete organization ${organization.id}.`,
+      `Falha ao excluir a organizacao ${organization.id}.`,
     );
   }
 
@@ -109,13 +114,25 @@ export class ClerkSyncService {
     const userId = membership.public_user_data?.user_id;
 
     if (!clerkOrgId || !userId) {
-      throw new Error("Membership event missing organization or user identifier.");
+      throw new Error(
+        "O evento de membership nao trouxe o identificador da organizacao ou do usuario.",
+      );
     }
 
     const organization = await this.findOrganizationByClerkOrgId(clerkOrgId);
 
     if (!organization) {
-      throw new Error(`Organization ${clerkOrgId} is not synced in Supabase yet.`);
+      throw new Error(
+        `A organizacao ${clerkOrgId} ainda nao foi sincronizada no Supabase.`,
+      );
+    }
+
+    const existingProfile = await this.findProfileOrganizationByUserId(userId);
+
+    if (existingProfile && existingProfile.org_id !== organization.id) {
+      throw new Error(
+        `O usuario ${userId} ja esta vinculado a outra organizacao no modelo atual de profiles. O sync multi-org nao e suportado sem refatorar para memberships.`,
+      );
     }
 
     const fullName = this.buildFullName({
@@ -141,22 +158,34 @@ export class ClerkSyncService {
         },
         { onConflict: "id" },
       ),
-      `Failed to upsert profile ${userId} from membership ${membership.id}.`,
+      `Falha ao fazer upsert do profile ${userId} a partir da membership ${membership.id}.`,
     );
   }
 
   private async deleteMembershipProfile(
     membership: ClerkDeletedOrganizationMembership,
   ): Promise<void> {
+    const clerkOrgId = membership.organization?.id;
     const userId = membership.public_user_data?.user_id;
 
     if (!userId) {
       return;
     }
 
+    const organization = clerkOrgId
+      ? await this.findOrganizationByClerkOrgId(clerkOrgId)
+      : null;
+    const deleteQuery = organization
+      ? this.supabase
+          .from("profiles")
+          .delete()
+          .eq("id", userId)
+          .eq("org_id", organization.id)
+      : this.supabase.from("profiles").delete().eq("id", userId);
+
     await this.runSupabaseMutation(
-      this.supabase.from("profiles").delete().eq("id", userId),
-      `Failed to delete profile ${userId} for membership ${membership.id}.`,
+      deleteQuery,
+      `Falha ao excluir o profile ${userId} para a membership ${membership.id}.`,
     );
   }
 
@@ -179,14 +208,14 @@ export class ClerkSyncService {
           phone_number: phoneNumber,
         })
         .eq("id", user.id),
-      `Failed to update profile ${user.id} from user sync.`,
+      `Falha ao atualizar o profile ${user.id} a partir do sync de usuario.`,
     );
   }
 
   private async deleteUserProfile(user: ClerkDeletedUser): Promise<void> {
     await this.runSupabaseMutation(
       this.supabase.from("profiles").delete().eq("id", user.id),
-      `Failed to delete profile ${user.id}.`,
+      `Falha ao excluir o profile ${user.id}.`,
     );
   }
 
@@ -200,7 +229,25 @@ export class ClerkSyncService {
       .maybeSingle<OrganizationRecord>();
 
     if (error) {
-      throw new Error(`Failed to resolve organization ${clerkOrgId}: ${error.message}`);
+      throw new Error(
+        `Falha ao resolver a organizacao ${clerkOrgId}: ${error.message}`,
+      );
+    }
+
+    return data;
+  }
+
+  private async findProfileOrganizationByUserId(
+    userId: string,
+  ): Promise<ProfileOrganizationRecord | null> {
+    const { data, error } = await this.supabase
+      .from("profiles")
+      .select("id, org_id")
+      .eq("id", userId)
+      .maybeSingle<ProfileOrganizationRecord>();
+
+    if (error) {
+      throw new Error(`Falha ao resolver o profile ${userId}: ${error.message}`);
     }
 
     return data;
